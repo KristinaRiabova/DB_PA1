@@ -19,14 +19,18 @@ const executeReadUncommitted = async () => {
     try {
         console.log("Starting Transaction 1: Updating balances for Alice and Bob");
         await conn1.beginTransaction();
-        await conn1.query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
-        await conn1.query("UPDATE accounts SET balance = 1500 WHERE name = 'Alice'");
-        await conn1.query("UPDATE accounts SET balance = 3000 WHERE name = 'Bob'");
-
         console.log("Starting Transaction 2: Reading balances for Alice and Bob");
         await conn2.beginTransaction();
         await conn2.query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+        await conn1.query("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED");
+        await conn1.query("UPDATE accounts SET balance = 999 WHERE name = 'Alice'");
+        await conn1.query("UPDATE accounts SET balance = 3000 WHERE name = 'Bob'");
+       
+       
 
+        const[isolationLevel]= await conn2.query("SELECT @@transaction_isolation");
+   
+        console.log(`!  ${isolationLevel [0] ['@@transaction_isolation']}`);
         const [aliceData] = await conn2.query("SELECT balance FROM accounts WHERE name = 'Alice'");
         console.log(`Dirty Read (READ UNCOMMITTED): Alice's balance = ${aliceData[0].balance}`);
 
@@ -92,8 +96,7 @@ const executeRepeatableRead = async () => {
 
         await conn2.beginTransaction();
         await conn2.query("UPDATE accounts SET balance = 2500 WHERE name = 'Alice'");
-        await conn2.commit(); // Commit here to allow repeatable read to observe old value
-
+        await conn2.commit(); 
         const [finalData] = await conn1.query("SELECT balance FROM accounts WHERE name = 'Alice'");
         console.log(`Final Read (REPEATABLE READ): Alice's balance = ${finalData[0].balance}`);
 
@@ -118,7 +121,7 @@ const executeNonRepeatableRead = async () => {
 
         await conn2.beginTransaction();
         await conn2.query("UPDATE accounts SET balance = 3000 WHERE name = 'Alice'");
-        await conn2.commit(); // Commit here to change Alice's balance
+        await conn2.commit(); 
 
         const [finalData] = await conn1.query("SELECT balance FROM accounts WHERE name = 'Alice'");
         console.log(`Final Read (Non-Repeatable): Alice's balance = ${finalData[0].balance}`);
@@ -131,7 +134,7 @@ const executeNonRepeatableRead = async () => {
         await conn2.end();
     }
 };
-
+//here i use gpt
 const simulateDeadlock = async () => {
     const conn1 = await createDbConnection();
     const conn2 = await createDbConnection();
@@ -141,14 +144,14 @@ const simulateDeadlock = async () => {
         await conn1.beginTransaction();
         await conn1.query("UPDATE accounts SET balance = 4000 WHERE name = 'Alice'");
 
-        // Simulate a delay to cause a deadlock
+    
         await new Promise(resolve => setTimeout(resolve, 50));
 
         console.log("Transaction 2: Updating Bob's balance");
         await conn2.beginTransaction();
         await conn2.query("UPDATE accounts SET balance = 5000 WHERE name = 'Bob'");
 
-        // Transaction 1 tries to read what Transaction 2 has
+
         const [aliceData] = await conn2.query("SELECT balance FROM accounts WHERE name = 'Alice'");
         console.log(`Attempting to read Alice's balance from Transaction 2: ${aliceData[0].balance}`);
 

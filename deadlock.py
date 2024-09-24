@@ -8,6 +8,7 @@ import time
 
 load_dotenv()
 
+
 HOST = os.getenv('host')
 USER = os.getenv('user')
 PASSWORD = os.getenv('password')
@@ -29,50 +30,48 @@ def create_connection():
     return None
 
 
-def read_uncommitted():
-  
-    connection1 = create_connection()
-    connection2 = create_connection()
+def deadlock_demo():
+
+ 
+    connection1 = create_connection()  
+    connection2 = create_connection()  
 
     try:
+       
         cursor1 = connection1.cursor()
         cursor2 = connection2.cursor()
 
+  
+        cursor1.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+        cursor2.execute("SET SESSION TRANSACTION ISOLATION LEVEL SERIALIZABLE")
 
-        cursor1.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-        cursor2.execute("SET SESSION TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 
-   
-        print(f"Transaction 1 started: {datetime.now()}")
+        print(f"Transaction 1 (Alice) started: {datetime.now()}")
         connection1.start_transaction()
-        cursor1.execute("UPDATE accounts SET balance = balance - 500 WHERE name = 'Alice'")
+        cursor1.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
+        balance_alice = cursor1.fetchone() 
+        time.sleep(2) 
 
-
-        time.sleep(2)
-
-      
-        print(f"Transaction 2 started: {datetime.now()}")
+       
+        print(f"Transaction 2 (Bob) started: {datetime.now()}")
         connection2.start_transaction()
-        cursor2.execute("SELECT balance FROM accounts WHERE name = 'Alice'")
-        balance_dirty_read_alice = cursor2.fetchone()[0]
-
         cursor2.execute("SELECT balance FROM accounts WHERE name = 'Bob'")
-        balance_dirty_read_bob = cursor2.fetchone()[0]
+        balance_bob = cursor2.fetchone()  
+        time.sleep(2)  
 
-        print(f"Dirty Read (READ UNCOMMITTED): Alice's balance = {balance_dirty_read_alice}")
-        print(f"Dirty Read (READ UNCOMMITTED): Bob's balance = {balance_dirty_read_bob}")
+        
+        cursor1.execute("UPDATE accounts SET balance = balance + 100 WHERE name = 'Bob'")
+        cursor2.execute("UPDATE accounts SET balance = balance + 100 WHERE name = 'Alice'")
 
-
-        print(f"Transaction 1 rollback(): {datetime.now()}")
-        connection1.rollback()
-
-   
-        print(f"Transaction 2 commit(): {datetime.now()}")
+       
+        connection1.commit()
         connection2.commit()
 
     except Error as e:
-        print(f"Error: {e}")
+      
+        print(f"Deadlock detected: {e}")
     finally:
+
         if cursor1:
             cursor1.close()
         if connection1 and connection1.is_connected():
@@ -84,5 +83,5 @@ def read_uncommitted():
 
 
 if __name__ == "__main__":
-    print("Demonstrating READ UNCOMMITTED:")
-    read_uncommitted()
+    print("Demonstrating Deadlock:")
+    deadlock_demo()
